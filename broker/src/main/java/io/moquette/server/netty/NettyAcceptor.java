@@ -146,16 +146,49 @@ public class NettyAcceptor implements ServerAcceptor {
         initializePlainTCPTransport(mqttHandler, props);
         String sslTcpPortProp = props.getProperty(BrokerConstants.SSL_PORT_PROPERTY_NAME);
         String wssPortProp = props.getProperty(BrokerConstants.WSS_PORT_PROPERTY_NAME);
+        String wsPortProp = props.getProperty(BrokerConstants.WEB_SOCKET_PORT_PROPERTY_NAME);
         if (sslTcpPortProp != null || wssPortProp != null) {
             SSLContext sslContext = sslCtxCreator.initSSLContext();
             if (sslContext == null) {
                 LOG.error("Can't initialize SSLHandler layer! Exiting, check your configuration of jks");
-                return;
             }
-            initializeSSLTCPTransport(mqttHandler, props, sslContext);
-            initializeWSSTransport(mqttHandler, props, sslContext);
+            else {
+                initializeSSLTCPTransport(mqttHandler, props, sslContext);
+                initializeWSSTransport(mqttHandler, props, sslContext);
+            }
+        }
+
+        if (wsPortProp != null) {
+            initializeWSTransport(mqttHandler,Integer.valueOf(wsPortProp),props);
         }
     }
+
+
+    private void initializeWSTransport(NettyMQTTHandler mqttHandler, int wsPortProp, IConfig config  ) {
+        final MoquetteIdleTimeoutHandler timeoutHandler = new MoquetteIdleTimeoutHandler();
+        String host = config.getProperty(BrokerConstants.HOST_PROPERTY_NAME);
+        initFactory(host, wsPortProp, "Secure websocket", new PipelineInitializer() {
+
+            @Override
+            void init(ChannelPipeline pipeline) throws Exception {
+                pipeline.addLast("httpEncoder", new HttpResponseEncoder());
+                pipeline.addLast("httpDecoder", new HttpRequestDecoder());
+                pipeline.addLast("aggregator", new HttpObjectAggregator(65536));
+                pipeline.addLast("webSocketHandler",new WebSocketServerProtocolHandler("/", MQTT_SUBPROTOCOL_CSV_LIST));
+                pipeline.addLast("ws2bytebufDecoder", new WebSocketFrameToByteBufDecoder());
+                pipeline.addLast("bytebuf2wsEncoder", new ByteBufToWebSocketFrameEncoder());
+                pipeline.addFirst("idleStateHandler", new IdleStateHandler(nettyChannelTimeoutSeconds, 0, 0));
+                pipeline.addAfter("idleStateHandler", "idleEventHandler", timeoutHandler);
+                pipeline.addFirst("bytemetrics", new BytesMetricsHandler(m_bytesMetricsCollector));
+                pipeline.addLast("decoder", new MqttDecoder());
+                pipeline.addLast("encoder", MqttEncoder.INSTANCE);
+                pipeline.addLast("metrics", new MessageMetricsHandler(m_metricsCollector));
+                pipeline.addLast("messageLogger", new MQTTMessageLogger());
+                pipeline.addLast("handler", mqttHandler);
+            }
+        });
+    }
+
 
     private void initFactory(String host, int port, String protocol, final PipelineInitializer pipeliner) {
         LOG.info("Initializing server. Protocol={}", protocol);

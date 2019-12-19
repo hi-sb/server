@@ -178,13 +178,13 @@ public class UploadFileAction extends Action {
                 String remoteFileName = fileUpload.getFilename();
                 long remoteFileSize = fileUpload.length();
 
-                if(bucket[0] == -1) {
-                    logger.warn("Not authenticated!");
-
-                    response.setStatus(HttpResponseStatus.BAD_REQUEST);
-                    response.setContent("Not authenticated!");
-                    return false;
-                }
+//                if(bucket[0] == -1) {
+//                    logger.warn("Not authenticated!");
+//
+//                    response.setStatus(HttpResponseStatus.BAD_REQUEST);
+//                    response.setContent("Not authenticated!");
+//                    return false;
+//                }
 
                 if (StringUtil.isNullOrEmpty(remoteFileName)) {
                     logger.warn("remoteFileName is empty!");
